@@ -1,0 +1,90 @@
+using Newtonsoft.Json;
+using RestSharp;
+using ServiceAgent.Spoonacular.REntities;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Text.Json.Nodes;
+using System.Threading.Tasks;
+using static System.Net.Mime.MediaTypeNames;
+
+namespace ServiceAgent.Imagga
+{
+    public class ImaggaService : IImaggaService
+    {
+        #region fields
+        const string? IMAGGA_API_KEY = "acc_13fd7a742240371";
+        const string? IMAGGA_SECRET = "f86856e4fc9989103ac2e4e5cb3e149d";
+        const string? BASIC_URL = "https://api.imagga.com/v2/";
+        string imageUrl1 = "https://imagga.com/static/images/tagging/wind-farm-538576_640.jpg";
+        string basicAuthValue => Convert.ToBase64String(
+                                    Encoding.UTF8.GetBytes(
+                                        string.Format($"{IMAGGA_API_KEY}:{IMAGGA_SECRET}")));
+        #endregion
+
+       public bool IfIsAirplane(string imageUrl)
+    {
+        try
+        {
+            // העלאת התמונה לשרת IMAGGA
+            string uploadId = UploadImageToServer(imageUrl);
+
+            // קבלת תגיות מהתמונה
+            var tags = GetImageTags(imageUrl);
+
+            // סינון ובדיקה של תגיות המקשרות למטוסים
+            foreach (var tag in tags)
+            {
+                if (tag.ToLower().Contains("airplane") || tag.ToLower().Contains("plane"))
+                {
+                    return true; // יש מטוס בתמונה
+                }
+            }
+
+            return false; // אין מטוס בתמונה
+        }
+        catch (Exception ex)
+        {
+            // טיפול בשגיאה במידה והעלאת התמונה או קבלת התגיות נכשלו
+            Console.WriteLine($"Error: {ex.Message}");
+            return false;
+        }
+    }
+
+
+        public string UploadImageToServer(string ImageUrl)
+        {
+            var client = new RestClient($"{BASIC_URL}/uploads");
+
+            var request = new RestRequest("", Method.Post);
+            request.AddHeader("Authorization", $"Basic {basicAuthValue}");
+            request.AddFile("image", ImageUrl);
+
+            RestResponse response = client.Execute(request);
+            var jsonString = response.Content;
+            var jsonObject = JsonConvert.DeserializeObject<dynamic>(jsonString!);
+
+            if (jsonObject!.status.type != "success")
+                throw new Exception(jsonObject!.status.text);
+
+            return jsonObject!.result.upload_id;
+        }
+
+        public void DeleteImageFromServer(string UploadID)
+        {
+            var client = new RestClient($"{BASIC_URL}/uploads/{UploadID}");
+
+            var request = new RestRequest("", Method.Delete);
+            request.AddHeader("Authorization", $"Basic {basicAuthValue}");
+
+            RestResponse response = client.Execute(request);
+            var jsonString = response.Content;
+            var jsonObject = JsonConvert.DeserializeObject<dynamic>(jsonString!);
+
+            if (jsonObject!.status.type != "success")
+                throw new Exception(jsonObject!.status.text);
+
+        }
+    }
+}
